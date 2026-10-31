@@ -1,0 +1,104 @@
+// API HUNTER - Database Schema
+// HUB-CENTRIC: multi-API websites (anabot.my.id style) are the prize.
+// One hub = one host = many endpoints (downloaders, AI chat, AI image, AI voice...).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ApiHub {
+  id            String    @id @default(cuid())
+  host          String    @unique
+  baseUrl       String
+  title         String? // detected from landing page <title>
+  status        String    @default("UNKNOWN") // ALIVE | REACHABLE | ERROR | DEAD | UNKNOWN
+  quality       Int       @default(0) // 0-100 hub score
+  tier          String    @default("LOW") // ELITE | HUB | LOW
+  endpointCount Int       @default(0) // distinct endpoints discovered on this host
+  aliveEndpoints Int      @default(0)
+  categories    String    @default("[]") // JSON array of category keys
+  reposSeen     String    @default("[]") // JSON array of "owner/repo"
+  repoCount     Int       @default(0)
+  httpCode      Int?
+  responseMs    Int?
+  seeded        Boolean   @default(false) // operator target example
+  hidden        Boolean   @default(false)
+  firstSeen     DateTime  @default(now())
+  lastSeen      DateTime  @default(now())
+  lastChecked   DateTime?
+
+  @@index([quality])
+  @@index([status])
+}
+
+model ApiEndpoint {
+  id          String    @id @default(cuid())
+  url         String    @unique
+  host        String
+  category    String    @default("other") // yt-dl | social-dl | aio-dl | ai-chat | ai-image | ai-voice | other
+  status      String    @default("UNKNOWN") // ALIVE | REACHABLE | ERROR | DEAD | UNKNOWN
+  httpCode    Int?
+  responseMs  Int?
+  sourceRepos String    @default("[]") // JSON array of "owner/repo"
+  sourceFile  String? // first file where found
+  evidence    String    @default("[]") // JSON array of {r,f,ln,s} — deep-scan proof
+  foundCount  Int       @default(1)
+  firstSeen   DateTime  @default(now())
+  lastSeen    DateTime  @default(now())
+  lastChecked DateTime?
+  lastAlive   DateTime?
+  checkCount  Int       @default(0)
+  ignored     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([category])
+  @@index([status])
+  @@index([lastSeen])
+  @@index([host])
+}
+
+// PERSISTENT REPO MEMORY — the manual-workflow emulation:
+// "recent update repo kholo → pura code dekho → API mili to uthao → agli repo".
+// A repo already in this table with the SAME pushed_at is old news → SKIP.
+// Only repos with a NEWER push (or brand-new repos) get re-opened.
+model RepoState {
+  fullName      String    @id
+  pushedAt      DateTime // repo's last push timestamp at scan time
+  lastScannedAt DateTime  @default(now())
+  filesRead     Int       @default(0)
+  endpointsNew  Int       @default(0) // new APIs found on latest scan
+  skipCount     Int       @default(0) // how many times skipped (no new code)
+  lastSkipAt    DateTime?
+
+  @@index([pushedAt])
+}
+
+model ScanRun {
+  id           String    @id @default(cuid())
+  preset       String // query preset name
+  query        String // actual github query
+  language     String
+  depth        String    @default("quick") // quick | deep | ultra (files read per repo)
+  status       String    @default("running") // running | done | stopped | error
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  reposScanned Int       @default(0)
+  filesRead    Int       @default(0)
+  urlsFound    Int       @default(0)
+  newEndpoints Int       @default(0)
+  aliveCount   Int       @default(0)
+  deadCount    Int       @default(0)
+  usedToken    Boolean   @default(false)
+
+  @@index([startedAt])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
